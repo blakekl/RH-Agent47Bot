@@ -1,0 +1,14 @@
+{
+  "name": "rh-marketplace-bot",
+  "version": "1.0.0",
+  "main": "index.js",
+  "engines": {
+    "node": "20.x"
+  },
+  "dependencies": {
+    "discord.js": "^14.19.0"
+  },
+  "scripts": {
+    "start": "node index.js"
+  }
+}
