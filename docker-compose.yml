@@ -1,0 +1,7 @@
+services:
+  discord-bot:
+    build: .
+    container_name: discord-tag-bot
+    restart: unless-stopped
+    env_file:
+      - .env
