@@ -48,7 +48,7 @@ async function closeThreadIfNeeded(thread, reasonPrefix = 'Auto-locked') {
     const matchedTags = thread.appliedTags.filter(tagId => TARGET_TAG_IDS.has(tagId));
 
     await thread.send({
-        content: `💼 Contract complete This Thread is now locked and archived.`
+        content: `💼 Contract complete. This Thread is now locked and archived.`
     });
 
     await thread.edit({
