@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "engines": {
-    "node": "20.x"
+    "node": ">=24.0.0"
   },
   "dependencies": {
     "discord.js": "^14.19.0"

@@ -48,7 +48,7 @@ async function closeThreadIfNeeded(thread, reasonPrefix = 'Auto-locked') {
     const matchedTags = thread.appliedTags.filter(tagId => TARGET_TAG_IDS.has(tagId));
 
     await thread.send({
-        content: `💼 Contract complete. Item marked as SOLD. Thread locked and archived.`
+        content: `💼 Contract complete This Thread is now locked and archived.`
     });
 
     await thread.edit({
@@ -60,7 +60,7 @@ async function closeThreadIfNeeded(thread, reasonPrefix = 'Auto-locked') {
     // Formatting readable thread link: <#THREAD_ID> turns into clickable #thread-name link
     const threadLink = `<#${thread.id}>`;
     await logMessage(
-        `💼 Contract complete. Item marked as SOLD. Thread locked and archived.\n` +
+        `💼 Contract complete.This Thread is now locked and archived.\n` +
         `**Thread:** ${threadLink} | **Name:** "${thread.name}" | **ID:** \`${thread.id}\` | **Tags:** ${matchedTags.join(', ')}`
     );
 
