@@ -39,6 +39,35 @@ async function logMessage(message) {
 }
 
 /**
+ * Locks archived thread - handles auto-archived thread locking.
+ */
+async function lockThreadIfNeeded(thread, reasonPrefix = 'Auto-archived') {
+    const hasBeenAutoArchived = thread.archived && !thread.locked;
+    if (!hasBeenAutoArchived) return false;
+
+    await thread.setArchived(false);
+
+    await thread.send({
+        content: `💼 Contract terminated. Post auto-locked due to inactivity. Target listing archived.`
+    });
+
+    await thread.edit({
+        locked: true,
+        archived: true,
+        reason: `${reasonPrefix} - auto archived. Locked thread.`
+    });
+
+    // Formatting readable thread link: <#THREAD_ID> turns into clickable #thread-name link
+    const threadLink = `<#${thread.id}>`;
+    await logMessage(
+        `💼 Contract terminated. Post auto-locked due to inactivity. Target listing archived.\n` + 
+        `**Thread:** ${threadLink} | **Name:** "${thread.name}" | **ID:** \`${thread.id}\``
+    );
+
+    return true;
+}
+
+/**
  * Closes and archives a target thread if it contains target tags.
  */
 async function closeThreadIfNeeded(thread, reasonPrefix = 'Auto-locked') {
@@ -202,7 +231,7 @@ client.on(Events.MessageCreate, async message => {
 
 client.on(Events.ThreadUpdate, async (oldThread, newThread) => {
     if (!FORUM_CHANNEL_IDS.has(newThread.parentId)) return;
-    if (newThread.locked || newThread.archived) return;
+    if (newThread.locked) return;
 
     const beforeTags = new Set(oldThread.appliedTags || []);
     const afterTags = new Set(newThread.appliedTags || []);
@@ -211,10 +240,17 @@ client.on(Events.ThreadUpdate, async (oldThread, newThread) => {
         TARGET_TAG_IDS.has(tagId) && !beforeTags.has(tagId)
     );
 
-    if (newlyApplied.length === 0) return;
+    const autoArchived = !oldThread.archived && newThread.archived && !newThread.locked
+
+    if (newlyApplied.length === 0 && !autoArchived) return;
 
     try {
-        await closeThreadIfNeeded(newThread, 'Auto-locked on tag update');
+        if (newlyApplied.length > 0) {
+            await closeThreadIfNeeded(newThread, 'Auto-locked on tag update');
+        }
+        if (autoArchived) {
+            await lockThreadIfNeeded(newThread, 'Auto-locked on archive update');
+        }
     } catch (error) {
         if (error.code === 50013) {
             console.error('❌ Bot is missing "Manage Threads" permission!');
