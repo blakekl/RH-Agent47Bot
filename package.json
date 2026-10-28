@@ -9,6 +9,7 @@
     "discord.js": "^14.19.0"
   },
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "dev": "node --env-file=.env index.js"
   }
 }
