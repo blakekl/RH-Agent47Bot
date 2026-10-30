@@ -1,11 +1,20 @@
-const { Client, GatewayIntentBits, Events, SlashCommandBuilder, PermissionsBitField, REST, Routes, ChannelType } = require('discord.js');
+const {
+  Client,
+  GatewayIntentBits,
+  Events,
+  SlashCommandBuilder,
+  PermissionsBitField,
+  REST,
+  Routes,
+  ChannelType,
+} = require('discord.js');
 
 const client = new Client({
-    intents: [
-        GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent
-    ]
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
+  ],
 });
 
 const BOT_TOKEN = process.env.TOKEN || 'YOUR_BOT_TOKEN_HERE';
@@ -14,250 +23,362 @@ const GUILD_ID = process.env.GUILD_ID;
 
 // Helper to parse comma-separated env vars into a Set
 const parseEnvSet = (envVar) =>
-    new Set((envVar || '').split(',').map(id => id.trim()).filter(Boolean));
-
+  new Set(
+    (envVar || '')
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean)
+  );
 const FORUM_CHANNEL_IDS = parseEnvSet(process.env.FORUM_CHANNEL_IDS);
 const TARGET_TAG_IDS = parseEnvSet(process.env.TARGET_TAG_IDS);
+const LIMITED_POST_CHANNELS = parseEnvSet(process.env.LIMITED_POST_CHANNELS);
+
 // Extract the first channel ID from the set for logging
 const LOGGING_CHANNEL_ID = [...parseEnvSet(process.env.LOGGING_CHANNEL)][0];
+
+// Parse post limiting settings
+const LIMITED_POST_LIMIT = parseInt(process.env.LIMITED_POST_LIMIT || '4', 10);
 
 /**
  * Sends structured log messages to the console and the designated Discord logging channel.
  */
 async function logMessage(message) {
-    console.log(message);
-    if (!LOGGING_CHANNEL_ID) return;
+  console.log(message);
+  if (!LOGGING_CHANNEL_ID) return;
 
-    try {
-        const channel = await client.channels.fetch(LOGGING_CHANNEL_ID);
-        if (channel && channel.isTextBased()) {
-            await channel.send(message);
-        }
-    } catch (error) {
-        console.error(`Failed to send log to channel ${LOGGING_CHANNEL_ID}:`, error);
+  try {
+    const channel = await client.channels.fetch(LOGGING_CHANNEL_ID);
+    if (channel && channel.isTextBased()) {
+      await channel.send(message);
     }
+  } catch (error) {
+    console.error(
+      `Failed to send log to channel ${LOGGING_CHANNEL_ID}:`,
+      error
+    );
+  }
 }
 
 /**
  * Locks archived thread - handles auto-archived thread locking.
  */
 async function lockThreadIfNeeded(thread, reasonPrefix = 'Auto-archived') {
-    const hasBeenAutoArchived = thread.archived && !thread.locked;
-    if (!hasBeenAutoArchived) return false;
+  const hasBeenAutoArchived = thread.archived && !thread.locked;
+  if (!hasBeenAutoArchived) return false;
 
-    await thread.setArchived(false);
+  await thread.setArchived(false);
 
-    await thread.send({
-        content: `💼 Contract terminated. Post auto-locked due to inactivity. Target listing archived.`
-    });
+  await thread.send({
+    content: `💼 Contract terminated. Post auto-locked due to inactivity. Target listing archived.`,
+  });
 
-    await thread.edit({
-        locked: true,
-        archived: true,
-        reason: `${reasonPrefix} - auto archived. Locked thread.`
-    });
+  await thread.edit({
+    locked: true,
+    archived: true,
+    reason: `${reasonPrefix} - auto archived. Locked thread.`,
+  });
 
-    // Formatting readable thread link: <#THREAD_ID> turns into clickable #thread-name link
-    const threadLink = `<#${thread.id}>`;
-    await logMessage(
-        `💼 Contract terminated. Post auto-locked due to inactivity. Target listing archived.\n` + 
-        `**Thread:** ${threadLink} | **Name:** "${thread.name}" | **ID:** \`${thread.id}\``
-    );
+  // Formatting readable thread link: <#THREAD_ID> turns into clickable #thread-name link
+  const threadLink = `<#${thread.id}>`;
+  await logMessage(
+    `💼 Contract terminated. Post auto-locked due to inactivity. Target listing archived.\n` +
+      `**Thread:** ${threadLink} | **Name:** "${thread.name}" | **ID:** \`${thread.id}\``
+  );
 
-    return true;
+  return true;
 }
 
 /**
  * Closes and archives a target thread if it contains target tags.
  */
 async function closeThreadIfNeeded(thread, reasonPrefix = 'Auto-locked') {
-    const hasTargetTag = thread.appliedTags?.some(tagId => TARGET_TAG_IDS.has(tagId));
-    if (!hasTargetTag) return false;
+  const hasTargetTag = thread.appliedTags?.some((tagId) =>
+    TARGET_TAG_IDS.has(tagId)
+  );
+  if (!hasTargetTag) return false;
 
-    const matchedTags = thread.appliedTags.filter(tagId => TARGET_TAG_IDS.has(tagId));
+  const matchedTags = thread.appliedTags.filter((tagId) =>
+    TARGET_TAG_IDS.has(tagId)
+  );
 
-    await thread.send({
-        content: `💼 Contract complete. This Thread is now locked and archived.`
-    });
+  await thread.send({
+    content: `💼 Contract complete. This Thread is now locked and archived.`,
+  });
 
-    await thread.edit({
-        locked: true,
-        archived: true,
-        reason: `${reasonPrefix} - tag(s) applied: ${matchedTags.join(', ')}`
-    });
+  await thread.edit({
+    locked: true,
+    archived: true,
+    reason: `${reasonPrefix} - tag(s) applied: ${matchedTags.join(', ')}`,
+  });
 
-    // Formatting readable thread link: <#THREAD_ID> turns into clickable #thread-name link
-    const threadLink = `<#${thread.id}>`;
-    await logMessage(
-        `💼 Contract complete.This Thread is now locked and archived.\n` +
-        `**Thread:** ${threadLink} | **Name:** "${thread.name}" | **ID:** \`${thread.id}\` | **Tags:** ${matchedTags.join(', ')}`
-    );
+  // Formatting readable thread link: <#THREAD_ID> turns into clickable #thread-name link
+  const threadLink = `<#${thread.id}>`;
+  await logMessage(
+    `💼 Contract complete.This Thread is now locked and archived.\n` +
+      `**Thread:** ${threadLink} | **Name:** "${thread.name}" | **ID:** \`${thread.id}\` | **Tags:** ${matchedTags.join(', ')}`
+  );
 
-    return true;
+  return true;
 }
 
 async function runCloseNowScan() {
-    let closedCount = 0;
+  let closedCount = 0;
 
-    for (const forumId of FORUM_CHANNEL_IDS) {
-        try {
-            console.log(`🔍 Fetching forum channel: ${forumId}...`);
-            const forumChannel = await client.channels.fetch(forumId);
-            
-            if (!forumChannel || forumChannel.type !== ChannelType.GuildForum) {
-                console.log(`⚠️ Channel ${forumId} is not a valid GuildForum channel.`);
-                continue;
-            }
+  for (const forumId of FORUM_CHANNEL_IDS) {
+    try {
+      console.log(`🔍 Fetching forum channel: ${forumId}...`);
+      const forumChannel = await client.channels.fetch(forumId);
 
-            // Fetch active threads across the guild, then filter for this specific forum
-            console.log(`🔍 Fetching active threads in guild for forum: ${forumChannel.name}...`);
-            const activeThreadsResponse = await forumChannel.guild.channels.fetchActiveThreads();
-            const threads = activeThreadsResponse.threads.filter(
-                t => t.parentId === forumId && !t.archived && !t.locked
-            );
+      if (!forumChannel || forumChannel.type !== ChannelType.GuildForum) {
+        console.log(`⚠️ Channel ${forumId} is not a valid GuildForum channel.`);
+        continue;
+      }
 
-            console.log(`📌 Found ${threads.size} active thread(s) in "${forumChannel.name}". Processing...`);
+      // Fetch active threads across the guild, then filter for this specific forum
+      console.log(
+        `🔍 Fetching active threads in guild for forum: ${forumChannel.name}...`
+      );
+      const activeThreadsResponse =
+        await forumChannel.guild.channels.fetchActiveThreads();
+      const threads = activeThreadsResponse.threads.filter(
+        (t) => t.parentId === forumId && !t.archived && !t.locked
+      );
 
-            for (const [_, thread] of threads) {
-                const closed = await closeThreadIfNeeded(thread, 'Manual sweep (/closenow)');
-                if (closed) closedCount++;
-            }
-        } catch (error) {
-            console.error(`❌ Error scanning forum ${forumId}:`, error);
-        }
+      console.log(
+        `📌 Found ${threads.size} active thread(s) in "${forumChannel.name}". Processing...`
+      );
+
+      for (const [_, thread] of threads) {
+        const closed = await closeThreadIfNeeded(
+          thread,
+          'Manual sweep (/closenow)'
+        );
+        if (closed) closedCount++;
+      }
+    } catch (error) {
+      console.error(`❌ Error scanning forum ${forumId}:`, error);
     }
+  }
 
-    return closedCount;
+  return closedCount;
 }
 
 client.once(Events.ClientReady, async () => {
-    console.log(`✅ Bot is online! Watching ${FORUM_CHANNEL_IDS.size} forum(s) for ${TARGET_TAG_IDS.size} tag(s).`);
+  console.log(
+    `✅ Bot is online! Watching ${FORUM_CHANNEL_IDS.size} forum(s) for ${TARGET_TAG_IDS.size} tag(s).`
+  );
 
-    const commands = [
-        new SlashCommandBuilder()
-            .setName('closenow')
-            .setDescription('Scans all configured forum posts and closes any active threads containing target tags.')
-            .setDefaultMemberPermissions(PermissionsBitField.Flags.ManageThreads)
-    ];
+  const commands = [
+    new SlashCommandBuilder()
+      .setName('closenow')
+      .setDescription(
+        'Scans all configured forum posts and closes any active threads containing target tags.'
+      )
+      .setDefaultMemberPermissions(PermissionsBitField.Flags.ManageThreads),
+  ];
 
-    const rest = new REST({ version: '10' }).setToken(BOT_TOKEN);
+  const rest = new REST({ version: '10' }).setToken(BOT_TOKEN);
 
-    try {
-        await rest.put(
-            Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
-            { body: commands }
-        );
-        console.log('✅ Guild slash commands registered instantly.');
-    } catch (error) {
-        console.error('Error registering slash commands:', error);
-    }
+  try {
+    await rest.put(Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID), {
+      body: commands,
+    });
+    console.log('✅ Guild slash commands registered instantly.');
+  } catch (error) {
+    console.error('Error registering slash commands:', error);
+  }
 });
 
 async function runCloseNowScan() {
-    let closedCount = 0;
+  let closedCount = 0;
 
-    for (const forumId of FORUM_CHANNEL_IDS) {
-        try {
-            console.log(`🔍 Fetching forum channel: ${forumId}...`);
-            const forumChannel = await client.channels.fetch(forumId);
-            
-            if (!forumChannel || forumChannel.type !== ChannelType.GuildForum) {
-                console.log(`⚠️ Channel ${forumId} is not a valid GuildForum channel.`);
-                continue;
-            }
+  for (const forumId of FORUM_CHANNEL_IDS) {
+    try {
+      console.log(`🔍 Fetching forum channel: ${forumId}...`);
+      const forumChannel = await client.channels.fetch(forumId);
 
-            // Fetch active threads across the guild, then filter for this specific forum
-            console.log(`🔍 Fetching active threads in guild for forum: ${forumChannel.name}...`);
-            const activeThreadsResponse = await forumChannel.guild.channels.fetchActiveThreads();
-            const threads = activeThreadsResponse.threads.filter(
-                t => t.parentId === forumId && !t.archived && !t.locked
-            );
+      if (!forumChannel || forumChannel.type !== ChannelType.GuildForum) {
+        console.log(`⚠️ Channel ${forumId} is not a valid GuildForum channel.`);
+        continue;
+      }
 
-            console.log(`📌 Found ${threads.size} active thread(s) in "${forumChannel.name}". Processing...`);
+      // Fetch active threads across the guild, then filter for this specific forum
+      console.log(
+        `🔍 Fetching active threads in guild for forum: ${forumChannel.name}...`
+      );
+      const activeThreadsResponse =
+        await forumChannel.guild.channels.fetchActiveThreads();
+      const threads = activeThreadsResponse.threads.filter(
+        (t) => t.parentId === forumId && !t.archived && !t.locked
+      );
 
-            for (const [_, thread] of threads) {
-                const closed = await closeThreadIfNeeded(thread, 'Manual sweep (/closenow)');
-                if (closed) closedCount++;
-            }
-        } catch (error) {
-            console.error(`❌ Error scanning forum ${forumId}:`, error);
-        }
+      console.log(
+        `📌 Found ${threads.size} active thread(s) in "${forumChannel.name}". Processing...`
+      );
+
+      for (const [_, thread] of threads) {
+        const closed = await closeThreadIfNeeded(
+          thread,
+          'Manual sweep (/closenow)'
+        );
+        if (closed) closedCount++;
+      }
+    } catch (error) {
+      console.error(`❌ Error scanning forum ${forumId}:`, error);
     }
+  }
 
-    return closedCount;
+  return closedCount;
 }
 
-client.on(Events.InteractionCreate, async interaction => {
-    if (!interaction.isChatInputCommand()) return;
+client.on(Events.InteractionCreate, async (interaction) => {
+  if (!interaction.isChatInputCommand()) return;
 
-    if (interaction.commandName === 'closenow') {
-        console.log(`⚙️ Executing /closenow command triggered by ${interaction.user.tag}...`);
+  if (interaction.commandName === 'closenow') {
+    console.log(
+      `⚙️ Executing /closenow command triggered by ${interaction.user.tag}...`
+    );
 
-        if (!interaction.member.permissions.has(PermissionsBitField.Flags.ManageThreads)) {
-            return interaction.reply({ content: 'You do not have permission to run this command.', ephemeral: true });
-        }
-
-        try {
-            // Defer immediately so Discord knows the bot is working (3-second window limit)
-            await interaction.deferReply({ ephemeral: true });
-
-            const closedCount = await runCloseNowScan();
-
-            await interaction.editReply({ content: `Sweep complete. Closed **${closedCount}** thread(s).` });
-            console.log(`✅ Sweep execution finished. Total closed: ${closedCount}`);
-        } catch (error) {
-            console.error('❌ Error handling /closenow command:', error);
-            
-            // Fallback response if defer/edit fails
-            if (interaction.deferred || interaction.replied) {
-                await interaction.editReply({ content: 'An error occurred while executing the sweep.' }).catch(() => {});
-            } else {
-                await interaction.reply({ content: 'An error occurred while executing the sweep.', ephemeral: true }).catch(() => {});
-            }
-        }
+    if (
+      !interaction.member.permissions.has(
+        PermissionsBitField.Flags.ManageThreads
+      )
+    ) {
+      return interaction.reply({
+        content: 'You do not have permission to run this command.',
+        ephemeral: true,
+      });
     }
+
+    try {
+      // Defer immediately so Discord knows the bot is working (3-second window limit)
+      await interaction.deferReply({ ephemeral: true });
+
+      const closedCount = await runCloseNowScan();
+
+      await interaction.editReply({
+        content: `Sweep complete. Closed **${closedCount}** thread(s).`,
+      });
+      console.log(`✅ Sweep execution finished. Total closed: ${closedCount}`);
+    } catch (error) {
+      console.error('❌ Error handling /closenow command:', error);
+
+      // Fallback response if defer/edit fails
+      if (interaction.deferred || interaction.replied) {
+        await interaction
+          .editReply({
+            content: 'An error occurred while executing the sweep.',
+          })
+          .catch(() => {});
+      } else {
+        await interaction
+          .reply({
+            content: 'An error occurred while executing the sweep.',
+            ephemeral: true,
+          })
+          .catch(() => {});
+      }
+    }
+  }
 });
 
 // Fallback prefix command (!closenow)
-client.on(Events.MessageCreate, async message => {
-    if (message.content.toLowerCase() === '!closenow' &&
-        message.member.permissions.has(PermissionsBitField.Flags.ManageThreads)) {
-
-        const replyMsg = await message.reply('Starting scan for open threads with target tags...');
-        const closedCount = await runCloseNowScan();
-        await replyMsg.edit(`Sweep complete. Closed **${closedCount}** thread(s).`);
-    }
+client.on(Events.MessageCreate, async (message) => {
+  if (
+    message.content.toLowerCase() === '!closenow' &&
+    message.member.permissions.has(PermissionsBitField.Flags.ManageThreads)
+  ) {
+    const replyMsg = await message.reply(
+      'Starting scan for open threads with target tags...'
+    );
+    const closedCount = await runCloseNowScan();
+    await replyMsg.edit(`Sweep complete. Closed **${closedCount}** thread(s).`);
+  }
 });
 
 client.on(Events.ThreadUpdate, async (oldThread, newThread) => {
-    if (!FORUM_CHANNEL_IDS.has(newThread.parentId)) return;
-    if (newThread.locked) return;
+  if (!FORUM_CHANNEL_IDS.has(newThread.parentId)) return;
+  if (newThread.locked) return;
 
-    const beforeTags = new Set(oldThread.appliedTags || []);
-    const afterTags = new Set(newThread.appliedTags || []);
+  const beforeTags = new Set(oldThread.appliedTags || []);
+  const afterTags = new Set(newThread.appliedTags || []);
 
-    const newlyApplied = [...afterTags].filter(tagId =>
-        TARGET_TAG_IDS.has(tagId) && !beforeTags.has(tagId)
-    );
+  const newlyApplied = [...afterTags].filter(
+    (tagId) => TARGET_TAG_IDS.has(tagId) && !beforeTags.has(tagId)
+  );
 
-    const autoArchived = !oldThread.archived && newThread.archived && !newThread.locked
+  const autoArchived =
+    !oldThread.archived && newThread.archived && !newThread.locked;
 
-    if (newlyApplied.length === 0 && !autoArchived) return;
+  if (newlyApplied.length === 0 && !autoArchived) return;
 
-    try {
-        if (newlyApplied.length > 0) {
-            await closeThreadIfNeeded(newThread, 'Auto-locked on tag update');
-        }
-        if (autoArchived) {
-            await lockThreadIfNeeded(newThread, 'Auto-locked on archive update');
-        }
-    } catch (error) {
-        if (error.code === 50013) {
-            console.error('❌ Bot is missing "Manage Threads" permission!');
-        } else {
-            console.error('Error editing thread:', error);
-        }
+  try {
+    if (newlyApplied.length > 0) {
+      await closeThreadIfNeeded(newThread, 'Auto-locked on tag update');
     }
+    if (autoArchived) {
+      await lockThreadIfNeeded(newThread, 'Auto-locked on archive update');
+    }
+  } catch (error) {
+    if (error.code === 50013) {
+      console.error('❌ Bot is missing "Manage Threads" permission!');
+    } else {
+      console.error('Error editing thread:', error);
+    }
+  }
+});
+
+client.on(Events.ThreadCreate, async (thread, newlyCreated) => {
+  if (!newlyCreated || !LIMITED_POST_CHANNELS.has(thread.parentId)) return;
+  if (!thread.ownerId) return;
+
+  try {
+    const activeThreadsMap = await thread.parent.threads.fetchActive();
+    const userChannelThreadsCount = activeThreadsMap.threads.filter(
+      (t) => t.ownerId === thread.ownerId && t.id !== thread.id
+    ).size;
+
+    if (userChannelThreadsCount >= LIMITED_POST_LIMIT) {
+      console.log(
+        `💼 [Agent47Bot] Target ${thread.ownerId} exceeded active listing limit ` +
+          `in channel ${thread.parentId} (${userChannelThreadsCount}/${LIMITED_POST_LIMIT}). Scrubbing post.`
+      );
+
+      // Attempt to DM the user before scrubbing
+      const member = await thread.guild.members
+        .fetch(thread.ownerId)
+        .catch(() => null);
+      if (member) {
+        try {
+          await member.send({
+            content: `💼 **Contract rejected.** You have reached your maximum active listings in <#${thread.parentId}>: (${LIMITED_POST_LIMIT}). Please close an existing listing before filing a new contract.`,
+          });
+          console.log(
+            `💼 [Agent47Bot] Rejection DM sent to user ${thread.ownerId}`
+          );
+        } catch (dmError) {
+          console.warn(
+            `[Agent47Bot] Could not DM user ${thread.ownerId} (DMs disabled or blocked):`,
+            dmError.message
+          );
+        }
+      }
+
+      // Cleanly delete the thread
+      await thread.delete(
+        `Exceeded channel active thread limit (${LIMITED_POST_LIMIT}).`
+      );
+      await logMessage(
+        `💼 **Contract terminated.** Target exceeded active listing limit in <#${thread.parentId}>.\n` +
+          `**User:** <@${thread.ownerId}> | **Name:** "${thread.name}" | **ID:** \`${thread.id}\``
+      );
+    }
+  } catch (err) {
+    console.error(
+      `[Agent47Bot] Error evaluating thread limit for user ${thread.ownerId}:`,
+      err
+    );
+  }
 });
 
 client.login(BOT_TOKEN);
