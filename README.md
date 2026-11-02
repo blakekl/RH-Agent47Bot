@@ -22,8 +22,11 @@ Create a `.env` file in the project root based on `.env.example`:
 | `TOKEN` | Discord Bot token from Developer Portal | `OTA1...` |
 | `CLIENT_ID` | Application Client ID | `123456789012345678` |
 | `GUILD_ID` | Target Server (Guild) ID for instant slash command registration | `123456789012345678` |
-| `FORUM_CHANNEL_IDS` | Comma-separated list of monitored forum channel IDs | `11111111,22222222` |
+| `FORUM_CHANNEL_IDS` | Comma-separated list of tag-monitored forum channel IDs | `11111111,22222222` |
 | `TARGET_TAG_IDS` | Comma-separated list of forum tag IDs that trigger auto-lock | `33333333,44444444` |
+| `LIMITED_POST_CHANNELS` | Comma-separated list of forum channel IDs to limit user active posts | `1234567890,098765421` |
+| `LIMITED_POST_LIMIT` | Integer representing the total number of active posts a user may have in a limited channel | `4` |
+| `RULE_LINK` | Link to the rule post. Included in rule reminder post on all new forum FORUM_CHANNEL posts. | `url` |
 | `LOGGING_CHANNEL` | Single channel ID where audit logs should be posted | `555555555555555555` |
 
 ---
@@ -37,6 +40,17 @@ Create a `.env` file in the project root based on `.env.example`:
    - `Manage Threads`
    - `Read Message History`
 3. **Interactions Endpoint URL:** Leave the **Interactions Endpoint URL** field completely **BLANK** in the Developer Portal General Information page so slash command payloads are routed over the WebSocket Gateway.
+
+---
+
+## Running locally
+```
+git clone <repository-url>
+cd rh-marketplace-bot
+cp .env.example .env.local
+# edit .env.local for your own bot / server info
+npm run dev
+```
 
 ---
 
