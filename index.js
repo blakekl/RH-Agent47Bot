@@ -32,6 +32,7 @@ const parseEnvSet = (envVar) =>
 const FORUM_CHANNEL_IDS = parseEnvSet(process.env.FORUM_CHANNEL_IDS);
 const TARGET_TAG_IDS = parseEnvSet(process.env.TARGET_TAG_IDS);
 const LIMITED_POST_CHANNELS = parseEnvSet(process.env.LIMITED_POST_CHANNELS);
+const RULE_LINK = [...parseEnvSet(process.env.RULE_LINK)][0];
 
 // Extract the first channel ID from the set for logging
 const LOGGING_CHANNEL_ID = [...parseEnvSet(process.env.LOGGING_CHANNEL)][0];
@@ -372,6 +373,11 @@ client.on(Events.ThreadCreate, async (thread, newlyCreated) => {
         `💼 **Contract terminated.** Target exceeded active listing limit in <#${thread.parentId}>.\n` +
           `**User:** <@${thread.ownerId}> | **Name:** "${thread.name}" | **ID:** \`${thread.id}\``
       );
+    } else {
+      // Send initial rule notice on newly created threads
+      await thread.send({
+        content: `<@${thread.ownerId}> 💼 **Briefing Received.** Your contract has been filed. Please review the operational directives (${RULE_LINK}) to ensure your listing remains compliant with ICA protocols.`,
+      });
     }
   } catch (err) {
     console.error(
