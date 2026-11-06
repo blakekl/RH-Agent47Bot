@@ -5,7 +5,7 @@ WORKDIR /usr/src/app
 # Copy lockfiles first for optimal caching
 COPY package*.json ./
 
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev --ignore-scripts
 
 COPY . .
 
